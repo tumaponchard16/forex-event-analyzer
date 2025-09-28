@@ -2,7 +2,7 @@
 API router configuration.
 """
 from fastapi import APIRouter
-from app.api.v1 import charts
+from .v1 import charts
 
 api_router = APIRouter(prefix="/api")
 
