@@ -175,6 +175,9 @@ docker-compose exec forex-chart-api pip list
 
 # Run tests inside container
 docker-compose exec forex-chart-api pytest
+
+#Run tests with coverage
+docker-compose exec forex-chart-api pytest --cov=app --cov-report=term-missing -v
 ```
 
 **🔍 Troubleshooting Commands:**
