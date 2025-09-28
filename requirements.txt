@@ -1,0 +1,2 @@
+# Development requirements (use requirements-dev.txt for full dev setup)
+-r requirements-prod.txt
