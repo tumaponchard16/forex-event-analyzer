@@ -3,7 +3,7 @@ Request models for the Forex Chart API.
 """
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, field_validator, Field
 
 
 class ChartRequest(BaseModel):
@@ -30,7 +30,8 @@ class ChartRequest(BaseModel):
         example="5m"
     )
     
-    @validator('pairs')
+    @field_validator('pairs')
+    @classmethod
     def validate_pairs(cls, v):
         if '/' not in v:
             raise ValueError('Currency pair must contain "/" (e.g., EUR/USD)')
@@ -42,14 +43,16 @@ class ChartRequest(BaseModel):
             raise ValueError('Each currency code must be exactly 3 characters')
         return v.upper()
     
-    @validator('interval')
+    @field_validator('interval')
+    @classmethod
     def validate_interval(cls, v):
         allowed_intervals = ['1m', '5m', '15m', '30m', '1h', '1d']
         if v not in allowed_intervals:
             raise ValueError(f'interval must be one of {allowed_intervals}')
         return v
     
-    @validator('start_date_time', 'end_date_time')
+    @field_validator('start_date_time', 'end_date_time')
+    @classmethod
     def validate_datetime_format(cls, v):
         formats = [
             "%Y-%m-%d %I:%M %p",    # 2025-08-25 10:00 AM
