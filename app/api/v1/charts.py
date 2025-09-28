@@ -5,18 +5,18 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
-from app.core.config import get_settings, Settings
-from app.core.exceptions import (
+from ...core.config import get_settings, Settings
+from ...core.exceptions import (
     ForexChartException,
     DataNotFoundError,
     InvalidDateRangeError,
     InvalidCurrencyPairError,
     ChartGenerationError
 )
-from app.core.logging import get_logger
-from app.models.requests import ChartRequest, HealthCheck
-from app.models.responses import ChartResponse, ErrorResponse
-from app.services.chart_service import ChartService
+from ...core.logging import get_logger
+from ...models.requests import ChartRequest, HealthCheck
+from ...models.responses import ChartResponse, ErrorResponse
+from ...services.chart_service import ChartService
 
 router = APIRouter(prefix="/v1", tags=["Charts v1"])
 logger = get_logger(__name__)

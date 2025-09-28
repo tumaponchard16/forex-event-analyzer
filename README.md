@@ -66,16 +66,234 @@ This application is specifically designed to:
 
 ### 🐳 **Docker Deployment (Recommended)**
 
+#### **Quick Start Commands**
+
 ```bash
 # Clone the repository
 git clone <repository-url>
 cd historal-chart-events
 
-# Start the API with Docker Compose
-docker-compose up -d
+# Build and start the API
+docker-compose up --build -d
 
 # API will be available at http://localhost:8000
 # API documentation at http://localhost:8000/docs
+```
+
+#### **📋 Complete Docker Commands Reference**
+
+**🔨 Build Commands:**
+
+```bash
+# Build the Docker image
+docker-compose build
+
+# Build with no cache (clean build)
+docker-compose build --no-cache
+
+# Build and start services
+docker-compose up --build
+
+# Build with detailed progress output
+docker-compose build --progress=plain
+```
+
+**🚀 Run Commands:**
+
+```bash
+# Start services in background (detached mode)
+docker-compose up -d
+
+# Start with build and logs
+docker-compose up --build
+
+# Start and follow logs
+docker-compose up --build -d && docker-compose logs -f
+
+# Start specific service only
+docker-compose up forex-chart-api
+```
+
+**📊 Monitor & Debug Commands:**
+
+```bash
+# Check container status
+docker-compose ps
+
+# View logs (all services)
+docker-compose logs
+
+# Follow logs in real-time
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs forex-chart-api
+
+# View last 50 log lines
+docker-compose logs --tail=50 forex-chart-api
+
+# Check container health
+docker-compose exec forex-chart-api curl http://localhost:8000/api/v1/health
+```
+
+**🔧 Management Commands:**
+
+```bash
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+
+# Stop and remove everything (containers, networks, images)
+docker-compose down --rmi all --volumes --remove-orphans
+
+# Restart services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart forex-chart-api
+
+# Scale service (run multiple instances)
+docker-compose up --scale forex-chart-api=3 -d
+```
+
+**🐚 Interactive Commands:**
+
+```bash
+# Execute command in running container
+docker-compose exec forex-chart-api bash
+
+# Run one-time command
+docker-compose run --rm forex-chart-api python -c "print('Hello World')"
+
+# Access Python shell in container
+docker-compose exec forex-chart-api python
+
+# Check installed packages
+docker-compose exec forex-chart-api pip list
+
+# Run tests inside container
+docker-compose exec forex-chart-api pytest
+```
+
+**🔍 Troubleshooting Commands:**
+
+```bash
+# Check Docker system info
+docker system df
+
+# Clean up unused Docker resources
+docker system prune
+
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# View detailed container info
+docker-compose exec forex-chart-api env
+
+# Check port mappings
+docker-compose port forex-chart-api 8000
+
+# Inspect container configuration
+docker inspect historal-chart-events-forex-chart-api
+```
+
+**⚡ Development Workflow:**
+
+```bash
+# Development mode with file watching
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+# Update dependencies and rebuild
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# Quick restart after code changes
+docker-compose restart forex-chart-api
+
+# View API documentation
+curl http://localhost:8000/docs
+# Or open in browser: http://localhost:8000/docs
+```
+
+#### **🎯 Common Use Cases:**
+
+**First Time Setup:**
+
+```bash
+# Complete setup from scratch
+git clone <repository-url>
+cd historal-chart-events
+docker-compose up --build -d
+docker-compose logs -f
+# Wait for "Application startup complete" message
+# Open http://localhost:8000/docs
+```
+
+**Daily Development:**
+
+```bash
+# Start your development session
+docker-compose up -d
+docker-compose logs -f forex-chart-api
+
+# After making code changes
+docker-compose restart forex-chart-api
+
+# End of day cleanup
+docker-compose down
+```
+
+**Production Deployment:**
+
+```bash
+# Production build and deploy
+docker-compose -f docker-compose.prod.yml up --build -d
+
+# Health check
+curl -f http://localhost:8000/api/v1/health || echo "Service not ready"
+
+# Monitor production logs
+docker-compose logs -f --tail=100 forex-chart-api
+```
+
+**Performance Testing:**
+
+```bash
+# Start with resource monitoring
+docker-compose up -d
+docker stats historal-chart-events-forex-chart-api
+
+# Load test the API
+curl -X POST "http://localhost:8000/api/v1/charts" \
+  -H "Content-Type: application/json" \
+  -d '{"pairs": "EUR/USD", "start_date_time": "2024-01-01", "end_date_time": "2024-12-31"}'
+```
+
+#### **📋 Expected Build Times:**
+
+- **First build**: 5-15 minutes (downloads dependencies)
+- **Subsequent builds**: 1-3 minutes (uses cache)
+- **Code-only changes**: 30 seconds - 1 minute
+
+#### **🔧 Environment Variables:**
+
+```bash
+# Create .env file for custom configuration
+cat > .env << EOF
+DEBUG=true
+LOG_LEVEL=DEBUG
+API_PORT=8001
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+EOF
+
+# Start with custom environment
+docker-compose up --build -d
 ```
 ````
 

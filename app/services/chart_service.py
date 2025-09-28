@@ -11,16 +11,16 @@ import pandas as pd
 import yfinance as yf
 from lightweight_charts import Chart
 
-from app.core.config import get_settings
-from app.core.exceptions import (
+from ..core.config import get_settings
+from ..core.exceptions import (
     DataNotFoundError,
     InvalidDateRangeError,
     InvalidCurrencyPairError,
     ChartGenerationError
 )
-from app.core.logging import LoggerMixin
-from app.models.requests import ChartRequest
-from app.models.responses import ChartData, ChartResponse, CandleData, ChartMetrics
+from ..core.logging import LoggerMixin
+from ..models.requests import ChartRequest
+from ..models.responses import ChartData, ChartResponse, CandleData, ChartMetrics
 
 
 class ChartService(LoggerMixin):

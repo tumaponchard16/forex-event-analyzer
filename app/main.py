@@ -7,10 +7,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import api_router
-from app.core.config import get_settings
-from app.core.logging import setup_logging, get_logger
-from app.core.exceptions import ForexChartException
+from .api import api_router
+from .core.config import get_settings
+from .core.logging import setup_logging, get_logger
+from .core.exceptions import ForexChartException
 
 # Setup logging
 setup_logging()

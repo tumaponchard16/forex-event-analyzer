@@ -3,7 +3,8 @@ Configuration management for the Forex Chart API.
 """
 from functools import lru_cache
 from typing import Optional
-from pydantic import BaseSettings, validator
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -41,23 +42,26 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
-    @validator('log_level')
+    @field_validator('log_level')
+    @classmethod
     def validate_log_level(cls, v):
         allowed_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         if v.upper() not in allowed_levels:
             raise ValueError(f'log_level must be one of {allowed_levels}')
         return v.upper()
     
-    @validator('default_interval')
+    @field_validator('default_interval')
+    @classmethod
     def validate_interval(cls, v):
         allowed_intervals = ['1m', '5m', '15m', '30m', '1h', '1d']
         if v not in allowed_intervals:
             raise ValueError(f'default_interval must be one of {allowed_intervals}')
         return v
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False
+    }
 
 
 @lru_cache()
