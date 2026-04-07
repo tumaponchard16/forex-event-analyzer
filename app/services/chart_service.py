@@ -8,15 +8,19 @@ import webbrowser
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
+import requests
 import yfinance as yf
 from lightweight_charts import Chart
 
 from ..core.config import get_settings
 from ..core.exceptions import (
+    ForexChartException,
     DataNotFoundError,
     InvalidDateRangeError,
     InvalidCurrencyPairError,
-    ChartGenerationError
+    ChartGenerationError,
+    ExternalServiceError,
+    UpstreamRateLimitError,
 )
 from ..core.logging import LoggerMixin
 from ..models.requests import ChartRequest
@@ -102,7 +106,7 @@ class ChartService(LoggerMixin):
                 chart_url=chart_url,
                 csv_filename=csv_filename,
                 metadata={
-                    "metrics": metrics.dict(),
+                    "metrics": metrics.model_dump(),
                     "settings": {
                         "interval": request.interval,
                         "data_points": len(df),
@@ -110,7 +114,9 @@ class ChartService(LoggerMixin):
                     }
                 }
             )
-            
+
+        except ForexChartException:
+            raise
         except Exception as e:
             self.logger.error(f"Chart generation failed: {str(e)}")
             raise ChartGenerationError(
@@ -164,12 +170,12 @@ class ChartService(LoggerMixin):
         pair_clean = pairs.upper().replace(' ', '')
         base, quote = pair_clean.split('/')
         
-        candidates = [
+        candidates = list(dict.fromkeys([
             pair_clean.replace('/', '') + '=X',  # EURUSD=X
             base + quote + '=X',                 # EURUSD=X (same)
             quote + base + '=X',                 # USDEUR=X (fallback)
             quote + '=X'                         # sometimes JPY=X works for USD/JPY
-        ]
+        ]))
         
         df = None
         used_symbol = None
@@ -196,6 +202,30 @@ class ChartService(LoggerMixin):
             except Exception as e:
                 self.logger.warning(f"Failed to download {sym}: {e}")
                 continue
+
+        if df is None or df.empty:
+            for sym in candidates:
+                df_try = self._download_market_data_direct(
+                    sym,
+                    start_dt,
+                    end_dt,
+                    interval,
+                )
+                if df_try is not None and not df_try.empty:
+                    df = df_try
+                    used_symbol = sym
+                    self.logger.info(f"Successfully fetched data using direct Yahoo endpoint: {sym}")
+                    break
+
+        if df is None or df.empty:
+            provider_issue = self._detect_provider_issue(
+                candidates[0],
+                start_dt,
+                end_dt,
+                interval,
+            )
+            if provider_issue is not None:
+                raise provider_issue
         
         if df is None or df.empty:
             raise DataNotFoundError(
@@ -218,6 +248,136 @@ class ChartService(LoggerMixin):
             df = df.tail(self.settings.max_data_points)
         
         return df
+
+    def _request_yahoo_chart(
+        self,
+        symbol: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        interval: str,
+    ) -> requests.Response:
+        """Request chart data from Yahoo Finance's chart endpoint."""
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        params = {
+            "period1": int(start_dt.timestamp()),
+            "period2": int(end_dt.timestamp()),
+            "interval": interval,
+            "includePrePost": "false",
+            "events": "div,splits,capitalGains",
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+        }
+
+        return requests.get(
+            url,
+            params=params,
+            headers=headers,
+            timeout=self.settings.yfinance_timeout,
+        )
+
+    def _download_market_data_direct(
+        self,
+        symbol: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        interval: str,
+    ) -> pd.DataFrame:
+        """Download chart data directly from Yahoo Finance when yfinance returns no rows."""
+        try:
+            response = self._request_yahoo_chart(symbol, start_dt, end_dt, interval)
+        except requests.RequestException as exc:
+            self.logger.warning(f"Direct Yahoo request failed for {symbol}: {exc}")
+            return pd.DataFrame()
+
+        if response.status_code != 200:
+            return pd.DataFrame()
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            self.logger.warning(f"Invalid Yahoo Finance JSON for {symbol}: {exc}")
+            return pd.DataFrame()
+
+        chart = payload.get("chart", {})
+        if chart.get("error") is not None:
+            return pd.DataFrame()
+
+        results = chart.get("result") or []
+        if not results:
+            return pd.DataFrame()
+
+        result = results[0]
+        timestamps = result.get("timestamp") or []
+        quote = ((result.get("indicators") or {}).get("quote") or [{}])[0]
+
+        open_values = quote.get("open") or []
+        high_values = quote.get("high") or []
+        low_values = quote.get("low") or []
+        close_values = quote.get("close") or []
+
+        candle_count = min(
+            len(timestamps),
+            len(open_values),
+            len(high_values),
+            len(low_values),
+            len(close_values),
+        )
+        if candle_count == 0:
+            return pd.DataFrame()
+
+        return pd.DataFrame(
+            {
+                "Open": open_values[:candle_count],
+                "High": high_values[:candle_count],
+                "Low": low_values[:candle_count],
+                "Close": close_values[:candle_count],
+            },
+            index=pd.to_datetime(timestamps[:candle_count], unit="s", utc=True).tz_convert(None),
+        )
+
+    def _detect_provider_issue(
+        self,
+        symbol: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        interval: str,
+    ) -> Optional[ForexChartException]:
+        """Inspect Yahoo Finance directly when yfinance returns no data."""
+        try:
+            response = self._request_yahoo_chart(symbol, start_dt, end_dt, interval)
+        except requests.RequestException as exc:
+            self.logger.warning(f"Failed to reach Yahoo Finance for {symbol}: {exc}")
+            return ExternalServiceError(
+                message="Yahoo Finance is unavailable. Please retry later.",
+                details={
+                    "provider": "Yahoo Finance",
+                    "symbol": symbol,
+                    "reason": str(exc),
+                },
+            )
+
+        if response.status_code == 429:
+            return UpstreamRateLimitError(
+                message="Yahoo Finance rate limited the request. Please retry in a few minutes.",
+                details={
+                    "provider": "Yahoo Finance",
+                    "symbol": symbol,
+                    "status_code": response.status_code,
+                },
+            )
+
+        if response.status_code in (401, 403) or response.status_code >= 500:
+            return ExternalServiceError(
+                message="Yahoo Finance is unavailable. Please retry later.",
+                details={
+                    "provider": "Yahoo Finance",
+                    "symbol": symbol,
+                    "status_code": response.status_code,
+                },
+            )
+
+        return None
     
     def _process_chart_data(
         self, 

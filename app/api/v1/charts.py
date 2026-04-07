@@ -11,7 +11,9 @@ from ...core.exceptions import (
     DataNotFoundError,
     InvalidDateRangeError,
     InvalidCurrencyPairError,
-    ChartGenerationError
+    ChartGenerationError,
+    ExternalServiceError,
+    UpstreamRateLimitError,
 )
 from ...core.logging import get_logger
 from ...models.requests import ChartRequest, HealthCheck
@@ -33,6 +35,7 @@ def get_chart_service() -> ChartService:
     responses={
         400: {"model": ErrorResponse, "description": "Bad Request"},
         404: {"model": ErrorResponse, "description": "Data Not Found"},
+        503: {"model": ErrorResponse, "description": "Upstream Service Unavailable"},
         500: {"model": ErrorResponse, "description": "Internal Server Error"}
     },
     summary="Generate Forex Chart",
@@ -59,6 +62,16 @@ async def create_chart(
         logger.warning(f"Client error: {e}")
         raise HTTPException(
             status_code=400 if isinstance(e, (InvalidDateRangeError, InvalidCurrencyPairError)) else 404,
+            detail={
+                "error_code": e.error_code,
+                "message": e.message,
+                "details": e.details
+            }
+        )
+    except (ExternalServiceError, UpstreamRateLimitError) as e:
+        logger.error(f"Upstream provider error: {e}")
+        raise HTTPException(
+            status_code=503,
             detail={
                 "error_code": e.error_code,
                 "message": e.message,
@@ -93,6 +106,7 @@ async def create_chart(
     responses={
         400: {"model": ErrorResponse, "description": "Bad Request"},
         404: {"model": ErrorResponse, "description": "Data Not Found"},
+        503: {"model": ErrorResponse, "description": "Upstream Service Unavailable"},
         500: {"model": ErrorResponse, "description": "Internal Server Error"}
     },
     summary="Get Chart Data Only",
@@ -116,6 +130,16 @@ async def get_chart_data(
         logger.warning(f"Client error: {e}")
         raise HTTPException(
             status_code=400 if isinstance(e, (InvalidDateRangeError, InvalidCurrencyPairError)) else 404,
+            detail={
+                "error_code": e.error_code,
+                "message": e.message,
+                "details": e.details
+            }
+        )
+    except (ExternalServiceError, UpstreamRateLimitError) as e:
+        logger.error(f"Upstream provider error: {e}")
+        raise HTTPException(
+            status_code=503,
             detail={
                 "error_code": e.error_code,
                 "message": e.message,

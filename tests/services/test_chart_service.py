@@ -4,13 +4,14 @@ Tests for the chart service.
 import pytest
 from unittest.mock import patch, Mock
 from datetime import datetime
+import pandas as pd
 
 from app.services.chart_service import ChartService
 from app.models.requests import ChartRequest
 from app.core.exceptions import (
     DataNotFoundError,
     InvalidDateRangeError,
-    ChartGenerationError
+    UpstreamRateLimitError,
 )
 
 
@@ -67,11 +68,63 @@ class TestChartService:
         """Test market data fetch with no data."""
         with patch('yfinance.download') as mock_download:
             mock_download.return_value = None
+            with patch.object(chart_service, '_detect_provider_issue', return_value=None):
+                with pytest.raises(DataNotFoundError):
+                    start_dt = datetime(2025, 8, 25, 10, 0)
+                    end_dt = datetime(2025, 8, 26, 10, 0)
+                    chart_service._fetch_market_data("INVALID/PAIR", start_dt, end_dt, "5m")
             
-            with pytest.raises(DataNotFoundError):
+    def test_fetch_market_data_upstream_rate_limited(self, chart_service):
+        """Test market data fetch when Yahoo Finance rate limits the request."""
+        with patch('yfinance.download', return_value=pd.DataFrame()):
+            with patch.object(
+                chart_service,
+                '_detect_provider_issue',
+                return_value=UpstreamRateLimitError(
+                    "Yahoo Finance rate limited the request. Please retry in a few minutes.",
+                    details={"provider": "Yahoo Finance"},
+                ),
+            ):
+                with pytest.raises(UpstreamRateLimitError):
+                    start_dt = datetime(2025, 8, 25, 10, 0)
+                    end_dt = datetime(2025, 8, 26, 10, 0)
+                    chart_service._fetch_market_data("EUR/USD", start_dt, end_dt, "5m")
+
+    def test_fetch_market_data_direct_fallback(self, chart_service):
+        """Test market data fetch falls back to direct Yahoo chart JSON when yfinance returns no rows."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "chart": {
+                "result": [
+                    {
+                        "timestamp": [1724580000, 1724580300],
+                        "indicators": {
+                            "quote": [
+                                {
+                                    "open": [1.17, 1.171],
+                                    "high": [1.172, 1.173],
+                                    "low": [1.169, 1.17],
+                                    "close": [1.171, 1.172],
+                                }
+                            ]
+                        },
+                    }
+                ],
+                "error": None,
+            }
+        }
+
+        with patch('yfinance.download', return_value=pd.DataFrame()):
+            with patch('requests.get', return_value=mock_response):
                 start_dt = datetime(2025, 8, 25, 10, 0)
                 end_dt = datetime(2025, 8, 26, 10, 0)
-                chart_service._fetch_market_data("INVALID/PAIR", start_dt, end_dt, "5m")
+
+                df = chart_service._fetch_market_data("EUR/USD", start_dt, end_dt, "5m")
+
+                assert not df.empty
+                assert list(df.columns) == ["Open", "High", "Low", "Close"]
+                assert len(df) == 2
     
     def test_process_chart_data(self, chart_service, sample_market_data):
         """Test chart data processing."""
@@ -126,7 +179,7 @@ class TestChartService:
     def test_generate_chart_data_not_found(self, chart_service):
         """Test chart generation with no data found."""
         request = ChartRequest(
-            pairs="INVALID/PAIR",
+            pairs="AAA/BBB",
             start_date_time="2025-08-25 10:00 AM",
             end_date_time="2025-08-26 10:00 AM",
             interval="5m"
@@ -134,6 +187,7 @@ class TestChartService:
         
         with patch('yfinance.download') as mock_download:
             mock_download.return_value = None
-            
-            with pytest.raises(ChartGenerationError):
-                chart_service.generate_chart(request)
+
+            with patch.object(chart_service, '_detect_provider_issue', return_value=None):
+                with pytest.raises(DataNotFoundError):
+                    chart_service.generate_chart(request)

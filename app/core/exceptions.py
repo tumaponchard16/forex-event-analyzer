@@ -61,3 +61,25 @@ class ChartGenerationError(ForexChartException):
             error_code="CHART_GENERATION_ERROR",
             details=details
         )
+
+
+class ExternalServiceError(ForexChartException):
+    """Raised when an upstream market data provider is unavailable."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            error_code="EXTERNAL_SERVICE_ERROR",
+            details=details
+        )
+
+
+class UpstreamRateLimitError(ForexChartException):
+    """Raised when an upstream market data provider rate limits the request."""
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            error_code="UPSTREAM_RATE_LIMIT",
+            details=details
+        )

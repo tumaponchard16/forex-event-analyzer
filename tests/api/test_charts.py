@@ -166,6 +166,23 @@ class TestChartsAPI:
             data = response.json()
             assert "error_code" in data["detail"]
             assert data["detail"]["error_code"] == "DATA_NOT_FOUND"
+
+    def test_create_chart_upstream_rate_limited(self, client, sample_chart_request):
+        """Test chart creation when the upstream provider rate limits the request."""
+        from app.core.exceptions import UpstreamRateLimitError
+
+        with patch('app.services.chart_service.ChartService.generate_chart') as mock_generate:
+            mock_generate.side_effect = UpstreamRateLimitError(
+                "Yahoo Finance rate limited the request. Please retry in a few minutes.",
+                details={"provider": "Yahoo Finance"}
+            )
+
+            response = client.post("/api/v1/charts", json=sample_chart_request)
+
+            assert response.status_code == 503
+            data = response.json()
+            assert "error_code" in data["detail"]
+            assert data["detail"]["error_code"] == "UPSTREAM_RATE_LIMIT"
     
     def test_create_chart_internal_error(self, client, sample_chart_request):
         """Test chart creation with internal error."""
